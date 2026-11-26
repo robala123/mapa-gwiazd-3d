@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa gwiazd 3D – demo</title>
+<style>
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:#03040a;color:#e6e9f2;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+canvas{display:block;position:fixed;inset:0;width:100%;height:100%;cursor:grab}
+canvas.drag{cursor:grabbing}
+.panel{position:fixed;top:16px;left:16px;width:320px;max-height:calc(100% - 32px);overflow:auto;background:rgba(14,18,32,.86);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px}
+h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.2px}
+.sub{font-size:12px;color:#9aa3b8;margin-top:2px}
+label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#8d97ad;display:block;margin-bottom:6px}
+input,select,textarea{width:100%;background:#0b0f1c;border:1px solid #273049;border-radius:8px;color:#e6e9f2;padding:9px 10px;font:inherit;font-size:13px}
+input:focus,select:focus,textarea:focus{outline:2px solid #5b8cff;outline-offset:0;border-color:transparent}
+textarea{resize:vertical;min-height:60px}
+.sugg{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+.sugg button{text-align:left;background:none;border:0;color:#cfd6e6;padding:7px 8px;border-radius:6px;font:inherit;font-size:13px;cursor:pointer}
+.sugg button:hover,.sugg button:focus{background:#1a2238;outline:none}
+.card{background:#0b0f1c;border:1px solid #222a40;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.star-name{font-size:16px;font-weight:700}
+.meta{font-size:12px;color:#9aa3b8}
+.row{display:flex;gap:8px}
+.btn{flex:1;border:0;border-radius:8px;padding:10px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;min-height:40px}
+.btn.primary{background:#5b8cff;color:#fff}
+.btn.primary:hover{background:#4a7af0}
+.btn.ghost{background:#1a2238;color:#cfd6e6}
+.btn.ghost:hover{background:#232d48}
+.list{display:flex;flex-direction:column;gap:4px}
+.list button{display:flex;align-items:center;gap:8px;background:none;border:0;color:#d6dcea;padding:6px 6px;border-radius:6px;font:inherit;font-size:13px;cursor:pointer;text-align:left}
+.list button:hover{background:#1a2238}
+.sw{width:18px;height:12px;border-radius:2px;flex-shrink:0;border:1px solid rgba(255,255,255,.25)}
+.hint{position:fixed;right:16px;bottom:16px;font-size:12px;color:#8d97ad;background:rgba(14,18,32,.7);padding:8px 12px;border-radius:8px}
+.zoom{position:fixed;right:16px;top:16px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:44px;height:44px;border-radius:10px;border:1px solid #273049;background:rgba(14,18,32,.86);color:#e6e9f2;font-size:20px;cursor:pointer}
+.empty{font-size:12px;color:#7d879c}
+.badge{display:inline-block;font-size:10px;padding:2px 6px;border-radius:99px;background:#1d2a4d;color:#9fb8ff;margin-left:6px;vertical-align:middle}
+@media (max-width:640px){.panel{top:auto;bottom:0;left:0;width:100%;max-height:48%;border-radius:14px 14px 0 0}.hint{display:none}}
+</style>
+</head>
+<body>
+<canvas id="sky" aria-label="Interaktywna mapa gwiazd 3D" role="img"></canvas>
+
+<div class="panel">
+  <div>
+    <h1>Mapa gwiazd 3D <span class="badge">demo</span></h1>
+    <div class="sub">Obracaj, przybliżaj i oznaczaj gwiazdy flagami.</div>
+  </div>
+
+  <div>
+    <label for="q">Szukaj gwiazdy</label>
+    <input id="q" type="search" placeholder="np. Syriusz, Wega, Polaris" autocomplete="off">
+    <div class="sugg" id="sugg"></div>
+  </div>
+
+  <div id="sel" class="card" hidden>
+    <div>
+      <div class="star-name" id="sName"></div>
+      <div class="meta" id="sMeta"></div>
+    </div>
+    <div>
+      <label for="fType">Flaga</label>
+      <select id="fType"></select>
+    </div>
+    <div id="customRow" hidden>
+      <div class="row">
+        <div style="flex:2"><label for="fText">Nazwa flagi</label><input id="fText" maxlength="24" placeholder="np. Baza Alfa"></div>
+        <div style="flex:1"><label for="fColor">Kolor</label><input id="fColor" type="color" value="#ffb020" style="height:38px;padding:3px"></div>
+      </div>
+    </div>
+    <div>
+      <label for="fDesc">Opis</label>
+      <textarea id="fDesc" placeholder="Własna notatka do tej gwiazdy"></textarea>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="save">Zapisz flagę</button>
+      <button class="btn ghost" id="remove">Usuń</button>
+    </div>
+  </div>
+
+  <div>
+    <label>Oznaczone gwiazdy</label>
+    <div class="list" id="flagged"></div>
+  </div>
+</div>
+
+<div class="zoom">
+  <button id="zin" aria-label="Przybliż">+</button>
+  <button id="zout" aria-label="Oddal">−</button>
+  <button id="reset" aria-label="Wyśrodkuj widok" style="font-size:14px">⟲</button>
+</div>
+<div class="hint">Przeciągnij, aby obrócić · kółko myszy, aby przybliżyć · kliknij gwiazdę, aby ją wybrać</div>
+
+<script>
+(function(){
+// ---------- Dane: wybrane jasne i bliskie gwiazdy (RA w godzinach, Dec w stopniach, odległość w latach świetlnych) ----------
+const NAMED=[
+["Słońce",0,0,0,"#fff4d6"],["Syriusz",6.752,-16.72,8.6,"#cfe0ff"],["Kanopus",6.399,-52.70,310,"#fff8ef"],
+["Arktur",14.261,19.18,36.7,"#ffc98a"],["Wega",18.616,38.78,25,"#d6e4ff"],["Kapella",5.278,46.00,42.9,"#fff0c8"],
+["Rigel",5.242,-8.20,860,"#bcd2ff"],["Procjon",7.655,5.22,11.5,"#fff7e8"],["Betelgeza",5.919,7.41,548,"#ff9a6a"],
+["Altair",19.846,8.87,16.7,"#e8efff"],["Aldebaran",4.599,16.51,65,"#ffb27a"],["Antares",16.490,-26.43,550,"#ff7f5c"],
+["Spika",13.420,-11.16,250,"#bcd0ff"],["Polluks",7.755,28.03,34,"#ffd29a"],["Fomalhaut",22.961,-29.62,25,"#eef3ff"],
+["Deneb",20.690,45.28,2600,"#e2ebff"],["Regulus",10.140,11.97,79,"#d5e2ff"],["Kastor",7.577,31.89,51,"#e8efff"],
+["Gwiazda Polarna (Polaris)",2.530,89.26,433,"#fff6dc"],["Alfa Centauri",14.660,-60.83,4.37,"#fff0cf"],
+["Proxima Centauri",14.495,-62.68,4.24,"#ff8c6b"],["Achernar",1.629,-57.24,139,"#c6d8ff"],["Bellatrix",5.419,6.35,250,"#c8d9ff"],
+["Mira",2.322,-2.98,300,"#ff9b7a"],["Algol",3.136,40.96,90,"#d4e2ff"],["Mizar",13.399,54.93,83,"#eef3ff"],
+["Alioth",12.900,55.96,81,"#eef3ff"],["Dubhe",11.062,61.75,123,"#ffcf8f"],["Gwiazda Barnarda",17.963,4.69,5.96,"#ff8a6a"],
+["Tau Ceti",1.734,-15.94,11.9,"#ffe6b8"],["Epsilon Eridani",3.549,-9.46,10.5,"#ffd9a8"],["Wolf 359",10.942,7.01,7.9,"#ff7a5c"]
+];
+const FLAGS={
+ pl:{n:"Polska",s:[["#ffffff",1],["#dc143c",1]]}, de:{n:"Niemcy",s:[["#000000",1],["#dd0000",1],["#ffce00",1]]},
+ ua:{n:"Ukraina",s:[["#0057b7",1],["#ffd700",1]]}, nl:{n:"Holandia",s:[["#ae1c28",1],["#ffffff",1],["#21468b",1]]},
+ fr:{n:"Francja",v:[["#0055a4",1],["#ffffff",1],["#ef4135",1]]}, it:{n:"Włochy",v:[["#009246",1],["#ffffff",1],["#ce2b37",1]]},
+ custom:{n:"Własna flaga (nazwa + kolor)"}
+};
+// ---------- Budowa sceny ----------
+const R=d=>d<=0?0:Math.log10(d+1)*120;
+function toXYZ(ra,dec,d){const a=ra/24*Math.PI*2,b=dec*Math.PI/180,r=R(d);return [r*Math.cos(b)*Math.cos(a),r*Math.sin(b),r*Math.cos(b)*Math.sin(a)];}
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const stars=NAMED.map((s,i)=>{const p=toXYZ(s[1],s[2],s[3]);return {id:"n"+i,name:s[0],dist:s[3],ra:s[1],dec:s[2],x:p[0],y:p[1],z:p[2],c:s[4],size:i===0?3.2:2.4,named:true};});
+const pal=["#ffffff","#dfe8ff","#cddcff","#fff2d9","#ffd9a8","#ffb98a"];
+for(let i=0;i<2600;i++){const u=rnd()*2-1,t=rnd()*Math.PI*2,dist=Math.pow(10,0.6+rnd()*2.9),r=R(dist),k=Math.sqrt(1-u*u);
+ stars.push({id:"b"+i,name:"HIP "+(10000+Math.floor(rnd()*99000)),dist:Math.round(dist*10)/10,x:r*k*Math.cos(t),y:r*u,z:r*k*Math.sin(t),c:pal[Math.floor(rnd()*pal.length)],size:0.6+rnd()*1.2,named:false});}
+// ---------- Flagi: zapis w przeglądarce ----------
+const KEY="mapa-gwiazd-flagi";
+let flags={};try{flags=JSON.parse(localStorage.getItem(KEY)||"{}")||{};}catch(e){flags={};}
+const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(flags));}catch(e){}};
+// ---------- Kamera ----------
+const cv=document.getElementById("sky"),ctx=cv.getContext("2d");
+let W,H,DPR,yaw=0.6,pitch=0.25,camD=420,selected=null,projected=[];
+function resize(){DPR=Math.min(window.devicePixelRatio||1,2);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+window.addEventListener("resize",resize);resize();
+const sprite=(()=>{const c=document.createElement("canvas");c.width=c.height=64;const g=c.getContext("2d");const gr=g.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,"rgba(255,255,255,1)");gr.addColorStop(.18,"rgba(255,255,255,.85)");gr.addColorStop(.45,"rgba(255,255,255,.18)");gr.addColorStop(1,"rgba(255,255,255,0)");g.fillStyle=gr;g.fillRect(0,0,64,64);return c;})();
+function drawFlag(x,y,f){
+ const fw=26,fh=16,px=x+6,py=y-30;
+ ctx.strokeStyle="rgba(255,255,255,.75)";ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x+6,y-4);ctx.lineTo(x+6,y-32);ctx.stroke();
+ const def=FLAGS[f.type];
+ if(def&&def.s){const sum=def.s.reduce((a,b)=>a+b[1],0);let yy=py;def.s.forEach(([c,w])=>{const h=fh*w/sum;ctx.fillStyle=c;ctx.fillRect(px,yy,fw,h+0.5);yy+=h;});}
+ else if(def&&def.v){const sum=def.v.reduce((a,b)=>a+b[1],0);let xx=px;def.v.forEach(([c,w])=>{const w2=fw*w/sum;ctx.fillStyle=c;ctx.fillRect(xx,py,w2+0.5,fh);xx+=w2;});}
+ else{ctx.fillStyle=f.color||"#ffb020";ctx.fillRect(px,py,fw,fh);}
+ ctx.strokeStyle="rgba(0,0,0,.35)";ctx.strokeRect(px,py,fw,fh);
+ const label=f.type==="custom"?(f.text||"Flaga"):def.n;
+ ctx.font="600 11px Inter,system-ui,sans-serif";ctx.fillStyle="rgba(230,233,242,.95)";ctx.fillText(label,px+fw+5,py+12);
+}
+function render(){
+ ctx.fillStyle="#03040a";ctx.fillRect(0,0,W,H);
+ const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch),f=Math.min(W,H)*0.9,cx=W/2,cyy=H/2;
+ projected=[];
+ for(const s of stars){
+  let x=s.x*cy-s.z*sy,z=s.x*sy+s.z*cy,y=s.y*cp-z*sp;z=s.y*sp+z*cp;z+=camD;
+  if(z<5)continue;const k=f/z;projected.push({s,sx:cx+x*k,sy:cyy-y*k,z,k});
+ }
+ projected.sort((a,b)=>b.z-a.z);
+ ctx.globalCompositeOperation="lighter";
+ for(const p of projected){
+  const kk=Math.min(2.5,p.k);const sz=Math.max(0.35,p.s.size*kk*0.55)*(p.s.named?1.7:1);
+  ctx.globalAlpha=Math.min(1,0.25+kk*0.5)*(p.s.named?1:0.8);
+  ctx.drawImage(sprite,p.sx-sz*2.5,p.sy-sz*2.5,sz*5,sz*5);
+  if(p.s.c!=="#ffffff"){ctx.globalAlpha*=0.55;ctx.fillStyle=p.s.c;ctx.beginPath();ctx.arc(p.sx,p.sy,Math.max(0.5,sz*0.6),0,6.283);ctx.fill();}
+ }
+ ctx.globalCompositeOperation="source-over";ctx.globalAlpha=1;
+ ctx.font="12px Inter,system-ui,sans-serif";
+ for(const p of projected){
+  if(p.s.named&&p.k>1.05){ctx.fillStyle="rgba(180,192,220,.75)";ctx.fillText(p.s.name,p.sx+8,p.sy+4);}
+ }
+ for(const p of projected){const fl=flags[p.s.id];if(fl)drawFlag(p.sx,p.sy,fl);}
+ if(selected){const p=projected.find(q=>q.s===selected);if(p){ctx.strokeStyle="#5b8cff";ctx.lineWidth=2;ctx.beginPath();ctx.arc(p.sx,p.sy,12,0,6.283);ctx.stroke();}}
+ requestAnimationFrame(render);
+}
+// ---------- Sterowanie ----------
+let drag=false,moved=false,lx=0,ly=0;
+cv.addEventListener("pointerdown",e=>{drag=true;moved=false;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId);cv.classList.add("drag");});
+cv.addEventListener("pointermove",e=>{if(!drag)return;const dx=e.clientX-lx,dy=e.clientY-ly;if(Math.abs(dx)+Math.abs(dy)>3)moved=true;yaw+=dx*0.005;pitch=Math.max(-1.5,Math.min(1.5,pitch+dy*0.005));lx=e.clientX;ly=e.clientY;});
+cv.addEventListener("pointerup",e=>{drag=false;cv.classList.remove("drag");if(!moved)pick(e.clientX,e.clientY);});
+cv.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY>0?1.12:0.89);},{passive:false});
+const zoom=m=>{camD=Math.max(30,Math.min(1400,camD*m));};
+document.getElementById("zin").onclick=()=>zoom(0.8);document.getElementById("zout").onclick=()=>zoom(1.25);
+document.getElementById("reset").onclick=()=>{yaw=0.6;pitch=0.25;camD=420;};
+function pick(x,y){let best=null,bd=14;for(const p of projected){const d=Math.hypot(p.sx-x,p.sy-y);if(d<bd){bd=d;best=p;}}if(best)select(best.s);}
+// ---------- Panel ----------
+const $=id=>document.getElementById(id);
+const fType=$("fType");Object.entries(FLAGS).forEach(([k,v])=>{const o=document.createElement("option");o.value=k;o.textContent=v.n;fType.appendChild(o);});
+fType.onchange=()=>{$("customRow").hidden=fType.value!=="custom";};
+function select(s){
+ selected=s;$("sel").hidden=false;$("sName").textContent=s.name;
+ $("sMeta").textContent=s.dist===0?"Nasza gwiazda":"Odległość: "+s.dist.toLocaleString("pl-PL")+" lat świetlnych";
+ const f=flags[s.id];fType.value=f?f.type:"pl";$("fText").value=f&&f.text||"";$("fColor").value=f&&f.color||"#ffb020";$("fDesc").value=f&&f.desc||"";
+ $("customRow").hidden=fType.value!=="custom";$("remove").disabled=!f;$("remove").style.opacity=f?1:.5;
+}
+function flyTo(s){yaw=Math.atan2(s.x,s.z);const r=Math.hypot(s.x,s.z);pitch=Math.max(-1.45,Math.min(1.45,Math.atan2(s.y,r)));camD=Math.max(30,300-Math.hypot(s.x,s.y,s.z)*0.5);select(s);}
+$("save").onclick=()=>{if(!selected)return;flags[selected.id]={type:fType.value,text:$("fText").value.trim(),color:$("fColor").value,desc:$("fDesc").value.trim(),name:selected.name};persist();select(selected);renderList();};
+$("remove").onclick=()=>{if(!selected||!flags[selected.id])return;delete flags[selected.id];persist();select(selected);renderList();};
+function swatch(f){const d=FLAGS[f.type];if(d&&d.s)return "linear-gradient(to bottom,"+d.s.map((c,i,a)=>c[0]+" "+(i/a.length*100)+"%,"+c[0]+" "+((i+1)/a.length*100)+"%").join(",")+")";if(d&&d.v)return "linear-gradient(to right,"+d.v.map((c,i,a)=>c[0]+" "+(i/a.length*100)+"%,"+c[0]+" "+((i+1)/a.length*100)+"%").join(",")+")";return f.color||"#ffb020";}
+function renderList(){const box=$("flagged");box.innerHTML="";const ids=Object.keys(flags);if(!ids.length){box.innerHTML='<div class="empty">Brak flag. Wybierz gwiazdę i przypisz jej flagę.</div>';return;}
+ ids.forEach(id=>{const f=flags[id],s=stars.find(x=>x.id===id);if(!s)return;const b=document.createElement("button");const sw=document.createElement("span");sw.className="sw";sw.style.background=swatch(f);b.appendChild(sw);b.appendChild(document.createTextNode(s.name+(f.type==="custom"&&f.text?" · "+f.text:"")));b.onclick=()=>flyTo(s);box.appendChild(b);});}
+$("q").addEventListener("input",()=>{const v=$("q").value.trim().toLowerCase(),box=$("sugg");box.innerHTML="";if(v.length<2)return;
+ stars.filter(s=>s.name.toLowerCase().includes(v)).slice(0,6).forEach(s=>{const b=document.createElement("button");b.textContent=s.name+(s.dist?" · "+s.dist+" ly":"");b.onclick=()=>{flyTo(s);box.innerHTML="";$("q").value=s.name;};box.appendChild(b);});});
+renderList();requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
